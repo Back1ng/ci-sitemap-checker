@@ -1,31 +1,45 @@
 package internal
 
 import (
+	"flag"
 	"fmt"
 	"gitlab.com/back1ng1/prerender-warming/internal/sitemapper"
 	"gitlab.com/back1ng1/prerender-warming/internal/warmer"
-	"gitlab.com/back1ng1/prerender-warming/pkg/conf"
+	"log"
+	"os"
 	"time"
 )
 
 var sleeping time.Duration
 
 func Run() {
-	sleeping = time.Hour * 1
-	warm := warmer.New(sleeping)
+	warm := warmer.New()
 
-	configuration := conf.New()
+	flag.String("sitemap", "", "Parsable sitemap.xml")
+	flag.Parse()
+
+	sitemap := flag.Lookup("sitemap").Value.String()
+
+	if len(sitemap) == 0 {
+		log.Fatal("Sitemap not defined. Add arg: -sitemap https://example.com/sitemap.xml")
+		os.Exit(1)
+	}
 
 	for {
 		sitemapParser := sitemapper.New()
-		sitemap := sitemapParser.Get(configuration.Url)
+		sitemap := sitemapParser.Get(sitemap)
 
 		for _, url := range sitemap.URL {
 			warm.Add(url.Loc)
 		}
 
-		warm.Refresh()
-		fmt.Println("Waiting 1 hour for refreshing...")
-		time.Sleep(sleeping)
+		err := warm.Refresh()
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		fmt.Println("All pages are success checked.")
+		os.Exit(0)
 	}
 }

@@ -1,7 +1,7 @@
 package warmer
 
 type Warmer interface {
-	Process(url string)
+	Process(url string) error
 	Add(url string)
-	Refresh()
+	Refresh() error
 }

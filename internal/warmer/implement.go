@@ -1,6 +1,7 @@
 package warmer
 
 import (
+	"errors"
 	"fmt"
 	"github.com/gosuri/uilive"
 	"net/http"
@@ -11,53 +12,34 @@ import (
 type warmer struct {
 	Urls map[string]int64
 	mu   *sync.Mutex
-
-	// ttl Set up the needed TTL from current time in seconds
-	ttl time.Duration
 }
 
 var client http.Client
 
-func New(ttl time.Duration) Warmer {
+func New() Warmer {
 	client = http.Client{}
 
 	return &warmer{
 		Urls: make(map[string]int64),
 		mu:   &sync.Mutex{},
-		ttl:  ttl,
 	}
 }
 
 // Process Perform check on low latency
-func (w *warmer) Process(url string) {
-	latencyPeek := time.Second * 10
-	latestResponse := time.Second * 20
-	for latestResponse > latencyPeek {
-		req := prepareUrl(url)
+func (w *warmer) Process(url string) error {
+	req := prepareUrl(url)
 
-		startReq := time.Now()
-		resp, err := client.Do(req)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-		if resp.StatusCode != 200 {
-			resp.Body.Close()
-			continue
-		}
-		resp.Body.Close()
-
-		latestResponse = time.Duration(time.Now().Sub(startReq).Seconds())
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
 	}
+	if resp.StatusCode != 200 {
+		resp.Body.Close()
+		return errors.New(fmt.Sprintf("Page: %v. Status code: %v", url, resp.StatusCode))
+	}
+	resp.Body.Close()
 
-	w.mu.Lock()
-	w.Urls[url] = time.Now().Unix() + int64(w.ttl)
-	w.mu.Unlock()
-	// TODO: check list of urls, if has same - check TTL
-
-	// TODO: load url until he wont be low latency
-
-	// TODO: after this, save and set the TTL before needed warming
+	return nil
 }
 
 func (w *warmer) Add(url string) {
@@ -66,23 +48,26 @@ func (w *warmer) Add(url string) {
 
 	_, ok := w.Urls[url]
 	if !ok {
-		w.Urls[url] = time.Now().Unix() + int64(w.ttl)
+		w.Urls[url] = time.Now().Unix()
 	}
 }
 
-func (w *warmer) Refresh() {
+func (w *warmer) Refresh() error {
 	writer := uilive.New()
 	writer.Start()
 
 	counter := 1
 
-	for url, ttl := range w.Urls {
-		if time.Now().Add(time.Second * w.ttl).Before(time.Unix(ttl, 0)) {
-			fmt.Fprintf(writer, "Warming up [%d/%d]\n", counter, len(w.Urls))
-			w.Process(url)
-			counter++
+	for url, _ := range w.Urls {
+		fmt.Fprintf(writer, "Checking [%d/%d]\n", counter, len(w.Urls))
+		err := w.Process(url)
+		if err != nil {
+			return err
 		}
+		counter++
 	}
+
+	return nil
 }
 
 func prepareUrl(url string) *http.Request {
@@ -90,7 +75,6 @@ func prepareUrl(url string) *http.Request {
 	if err != nil {
 		fmt.Println(err)
 	}
-	req.Header.Set("User-Agent", "googlebot")
 
 	return req
 }
