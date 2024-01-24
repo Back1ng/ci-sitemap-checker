@@ -1,16 +1,14 @@
 package internal
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"gitlab.com/back1ng1/prerender-warming/internal/sitemapper"
 	"gitlab.com/back1ng1/prerender-warming/internal/warmer"
 	"log"
 	"os"
-	"time"
 )
-
-var sleeping time.Duration
 
 func Run() {
 	warm := warmer.New()
@@ -28,15 +26,19 @@ func Run() {
 	for {
 		sitemapParser := sitemapper.New()
 		sitemap := sitemapParser.Get(sitemap)
+		filename := "e2e-tests-result.json"
 
 		for _, url := range sitemap.URL {
 			warm.Add(url.Loc)
 		}
 
 		err := warm.Refresh()
-		if err != nil {
-			fmt.Println(err)
+		output, _ := json.Marshal(err)
+		if len(err) > 0 {
+			os.WriteFile(filename, output, 0777)
 			os.Exit(1)
+		} else {
+			os.WriteFile(filename, []byte("[]"), 0777)
 		}
 
 		fmt.Println("All pages are success checked.")

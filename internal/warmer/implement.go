@@ -1,7 +1,6 @@
 package warmer
 
 import (
-	"errors"
 	"fmt"
 	"github.com/gosuri/uilive"
 	"net/http"
@@ -12,6 +11,11 @@ import (
 type warmer struct {
 	Urls map[string]int64
 	mu   *sync.Mutex
+}
+
+type FailedCheck struct {
+	URL        string `json:"url"`
+	StatusCode int    `json:"status_code"`
 }
 
 var client http.Client
@@ -26,16 +30,13 @@ func New() Warmer {
 }
 
 // Process Perform check on low latency
-func (w *warmer) Process(url string) error {
+func (w *warmer) Process(url string) *FailedCheck {
 	req := prepareUrl(url)
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
+	resp, _ := client.Do(req)
 	if resp.StatusCode != 200 {
 		resp.Body.Close()
-		return errors.New(fmt.Sprintf("Page: %v. Status code: %v", url, resp.StatusCode))
+		return &FailedCheck{URL: url, StatusCode: resp.StatusCode}
 	}
 	resp.Body.Close()
 
@@ -52,22 +53,24 @@ func (w *warmer) Add(url string) {
 	}
 }
 
-func (w *warmer) Refresh() error {
+func (w *warmer) Refresh() []FailedCheck {
 	writer := uilive.New()
 	writer.Start()
 
 	counter := 1
 
+	var failed []FailedCheck
+
 	for url, _ := range w.Urls {
 		fmt.Fprintf(writer, "Checking [%d/%d]\n", counter, len(w.Urls))
 		err := w.Process(url)
 		if err != nil {
-			return err
+			failed = append(failed, *err)
 		}
 		counter++
 	}
 
-	return nil
+	return failed
 }
 
 func prepareUrl(url string) *http.Request {
@@ -75,6 +78,7 @@ func prepareUrl(url string) *http.Request {
 	if err != nil {
 		fmt.Println(err)
 	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
 
 	return req
 }
