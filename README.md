@@ -4,7 +4,7 @@
 This utility will help you check if all pages from your sitemap are accessible
 
 ## Example usage:
-``go run ./... -sitemap https://example.com/sitemap.xml``
+``go run cmd/warming.go -url https://example.com/sitemap.xml -threads 4``
 
 ## Example success output:
 All pages are success checked.

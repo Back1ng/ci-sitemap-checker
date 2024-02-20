@@ -5,12 +5,15 @@ import (
 	"github.com/gosuri/uilive"
 	"net/http"
 	"sync"
-	"time"
 )
 
 type warmer struct {
-	Urls map[string]int64
-	mu   *sync.Mutex
+	client http.Client
+	writer *uilive.Writer
+	mu     *sync.Mutex
+
+	url <-chan string
+	err chan FailedCheck
 }
 
 type FailedCheck struct {
@@ -18,14 +21,16 @@ type FailedCheck struct {
 	StatusCode int    `json:"status_code"`
 }
 
-var client http.Client
-
-func New() Warmer {
-	client = http.Client{}
+func New(url <-chan string, errs chan FailedCheck) Warmer {
+	writer := uilive.New()
+	writer.Start()
 
 	return &warmer{
-		Urls: make(map[string]int64),
-		mu:   &sync.Mutex{},
+		client: http.Client{},
+		mu:     &sync.Mutex{},
+		writer: writer,
+		url:    url,
+		err:    errs,
 	}
 }
 
@@ -33,7 +38,7 @@ func New() Warmer {
 func (w *warmer) Process(url string) *FailedCheck {
 	req := prepareUrl(url)
 
-	resp, _ := client.Do(req)
+	resp, _ := w.client.Do(req)
 	if resp.StatusCode != 200 {
 		resp.Body.Close()
 		return &FailedCheck{URL: url, StatusCode: resp.StatusCode}
@@ -43,34 +48,16 @@ func (w *warmer) Process(url string) *FailedCheck {
 	return nil
 }
 
-func (w *warmer) Add(url string) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
+func (w *warmer) Refresh() {
+	for url := range w.url {
+		fmt.Fprintf(w.writer, "Urls left: %d\n", len(w.url))
 
-	_, ok := w.Urls[url]
-	if !ok {
-		w.Urls[url] = time.Now().Unix()
-	}
-}
-
-func (w *warmer) Refresh() []FailedCheck {
-	writer := uilive.New()
-	writer.Start()
-
-	counter := 1
-
-	var failed []FailedCheck
-
-	for url, _ := range w.Urls {
-		fmt.Fprintf(writer, "Checking [%d/%d]\n", counter, len(w.Urls))
-		err := w.Process(url)
-		if err != nil {
-			failed = append(failed, *err)
+		if err := w.Process(url); err != nil {
+			w.err <- *err
 		}
-		counter++
 	}
 
-	return failed
+	w.writer.Flush()
 }
 
 func prepareUrl(url string) *http.Request {
