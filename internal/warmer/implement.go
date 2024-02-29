@@ -50,7 +50,9 @@ func (w *warmer) Process(url string) *FailedCheck {
 
 func (w *warmer) Refresh() {
 	for url := range w.url {
-		fmt.Fprintf(w.writer, "Urls left: %d\n", len(w.url))
+		//fmt.Fprintf(w.writer, "Urls left: %d\n", len(w.url))
+
+		fmt.Printf("Process %s...\n", url)
 
 		if err := w.Process(url); err != nil {
 			w.err <- *err
