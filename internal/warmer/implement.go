@@ -1,10 +1,12 @@
 package warmer
 
 import (
+	"crypto/tls"
 	"fmt"
-	"github.com/gosuri/uilive"
 	"net/http"
 	"sync"
+
+	"github.com/gosuri/uilive"
 )
 
 type warmer struct {
@@ -26,7 +28,11 @@ func New(url <-chan string, errs chan FailedCheck) Warmer {
 	writer.Start()
 
 	return &warmer{
-		client: http.Client{},
+		client: http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+		},
 		mu:     &sync.Mutex{},
 		writer: writer,
 		url:    url,

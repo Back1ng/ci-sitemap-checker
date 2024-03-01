@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"gitlab.com/back1ng1/prerender-warming/internal/sitemapper"
-	"gitlab.com/back1ng1/prerender-warming/internal/warmer"
 	"log"
 	"os"
 	"sync"
 	"time"
+
+	"gitlab.com/back1ng1/prerender-warming/internal/sitemapper"
+	"gitlab.com/back1ng1/prerender-warming/internal/warmer"
 )
 
 func Run() {

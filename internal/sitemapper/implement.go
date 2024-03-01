@@ -1,6 +1,7 @@
 package sitemapper
 
 import (
+	"crypto/tls"
 	"encoding/xml"
 	"io"
 	"log"
@@ -15,7 +16,12 @@ func New() SitemapParser {
 }
 
 func (s *sitemapper) Get(url string) Sitemap {
-	resp, err := http.Get(url)
+	client := http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	resp, err := client.Get(url)
 	if err != nil {
 		log.Fatal(err)
 	}
